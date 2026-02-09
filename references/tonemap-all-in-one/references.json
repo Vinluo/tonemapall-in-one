@@ -1,0 +1,119 @@
+{
+  "updated_at": "2026-02-10",
+  "collection": "tonemap-all-in-one",
+  "items": [
+    {
+      "id": "aces",
+      "name": "ACES",
+      "doc": "algorithms/aces.md",
+      "references": [
+        { "title": "ACES Central", "url": "https://docs.acescentral.com/", "kind": "primary" },
+        { "title": "ampas/aces-dev", "url": "https://github.com/ampas/aces-dev", "kind": "primary" },
+        { "title": "BakingLab ACES.hlsl", "url": "https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl", "kind": "implementation" },
+        { "title": "glsl-tone-map aces.glsl", "url": "https://unpkg.com/glsl-tone-map@2.2.0/aces.glsl", "kind": "implementation" }
+      ],
+      "snapshots": ["snapshots/aces.glsl", "snapshots/aces-dev-README.md"]
+    },
+    {
+      "id": "agx",
+      "name": "AgX",
+      "doc": "algorithms/agx.md",
+      "references": [
+        { "title": "sobotka/AgX", "url": "https://github.com/sobotka/AgX", "kind": "primary" },
+        { "title": "three.js AgX", "url": "https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/tonemapping_pars_fragment.glsl.js", "kind": "implementation" },
+        { "title": "Bevy tonemapping_shared.wgsl", "url": "https://github.com/bevyengine/bevy/blob/main/crates/bevy_core_pipeline/src/tonemapping/tonemapping_shared.wgsl", "kind": "implementation" },
+        { "title": "glsl-tone-map agx.glsl", "url": "https://unpkg.com/glsl-tone-map@2.2.0/agx.glsl", "kind": "implementation" }
+      ],
+      "snapshots": [
+        "snapshots/agx.glsl",
+        "snapshots/threejs_tonemapping_pars_fragment.glsl.js",
+        "snapshots/bevy_tonemapping_shared.wgsl"
+      ]
+    },
+    {
+      "id": "agx_variants",
+      "name": "AgX Variants",
+      "doc": "algorithms/agx-variants.md",
+      "references": [
+        { "title": "Minimal AgX Implementation", "url": "https://iolite-engine.com/blog_posts/minimal_agx_implementation", "kind": "primary" },
+        { "title": "glsl-tone-map agx.glsl (agxGolden/agxPunchy)", "url": "https://unpkg.com/glsl-tone-map@2.2.0/agx.glsl", "kind": "implementation" }
+      ],
+      "snapshots": ["snapshots/agx.glsl"]
+    },
+    {
+      "id": "reinhard",
+      "name": "Reinhard",
+      "doc": "algorithms/reinhard.md",
+      "references": [
+        { "title": "Photographic Tone Reproduction page", "url": "https://w3.impa.br/~lvelho/ip02/papers/reinhard/", "kind": "primary" },
+        { "title": "Photographic Tone Reproduction PDF", "url": "https://w3.impa.br/~lvelho/ip02/papers/reinhard/tonemap.pdf", "kind": "primary" },
+        { "title": "glsl-tone-map reinhard.glsl", "url": "https://unpkg.com/glsl-tone-map@2.2.0/reinhard.glsl", "kind": "implementation" }
+      ],
+      "snapshots": ["snapshots/reinhard-tonemap-2002.pdf", "snapshots/reinhard.glsl"]
+    },
+    {
+      "id": "tony_mc_mapface",
+      "name": "Tony McMapface",
+      "doc": "algorithms/tony-mc-mapface.md",
+      "references": [
+        { "title": "h3r2tic/tony-mc-mapface", "url": "https://github.com/h3r2tic/tony-mc-mapface", "kind": "primary" },
+        { "title": "tony_mc_mapface.hlsl", "url": "https://github.com/h3r2tic/tony-mc-mapface/blob/main/shader/tony_mc_mapface.hlsl", "kind": "implementation" }
+      ],
+      "snapshots": ["snapshots/tony-mc-mapface-README.md", "snapshots/tony_mc_mapface.hlsl"]
+    },
+    {
+      "id": "flim",
+      "name": "Flim by Bean",
+      "doc": "algorithms/flim-by-bean.md",
+      "references": [
+        { "title": "bean-mhm/flim", "url": "https://github.com/bean-mhm/flim", "kind": "primary" },
+        { "title": "flim.py", "url": "https://github.com/bean-mhm/flim/blob/main/flim.py", "kind": "implementation" },
+        { "title": "flim releases", "url": "https://github.com/bean-mhm/flim/releases", "kind": "primary" }
+      ],
+      "snapshots": ["snapshots/flim-README.md", "snapshots/flim.py", "snapshots/flim-main.py"]
+    },
+    {
+      "id": "gran_turismo_uchimura",
+      "name": "Gran Turismo / Uchimura",
+      "doc": "algorithms/gran-turismo-uchimura.md",
+      "references": [
+        { "title": "HDR Theory and Practice (Slideshare)", "url": "https://www.slideshare.net/nikuque/hdr-theory-and-practicce-jp", "kind": "primary" },
+        { "title": "glsl-tone-map uchimura.glsl", "url": "https://unpkg.com/glsl-tone-map@2.2.0/uchimura.glsl", "kind": "implementation" }
+      ],
+      "snapshots": ["snapshots/uchimura.glsl", "snapshots/uchimura_hdr_theory_and_practice_slideshare.html"]
+    },
+    {
+      "id": "hejl",
+      "name": "Hejl",
+      "doc": "algorithms/hejl.md",
+      "references": [
+        { "title": "Filmic Tonemapping Operators (Hejl/Burgess-Dawson mention)", "url": "http://filmicworlds.com/blog/filmic-tonemapping-operators/", "kind": "primary" },
+        { "title": "A Closer Look At Tone Mapping", "url": "https://therealmjp.github.io/posts/a-closer-look-at-tone-mapping/", "kind": "secondary" }
+      ],
+      "snapshots": ["snapshots/filmicworlds-tonemapping-operators.html"]
+    },
+    {
+      "id": "gt7",
+      "name": "GT7",
+      "doc": "algorithms/gt7.md",
+      "references": [
+        { "title": "SIGGRAPH 2025 course", "url": "https://blog.selfshadow.com/publications/s2025-shading-course/", "kind": "primary" },
+        { "title": "GT7 code sample", "url": "https://blog.selfshadow.com/publications/s2025-shading-course/pdi/supplemental/gt7_tone_mapping.cpp", "kind": "implementation" },
+        { "title": "GT7 slides v1.1", "url": "https://blog.selfshadow.com/publications/s2025-shading-course/pdi/s2025_pbs_pdi_slides_v1.1.pdf", "kind": "primary" }
+      ],
+      "snapshots": ["snapshots/gt7_tone_mapping.cpp", "snapshots/gt7_pbs_slides_v1.1.pdf"]
+    },
+    {
+      "id": "amd_lpm",
+      "name": "AMD LPM",
+      "doc": "algorithms/amd-lpm.md",
+      "references": [
+        { "title": "GPUOpen FidelityFX LPM", "url": "https://gpuopen.com/fidelityfx-lpm/", "kind": "primary" },
+        { "title": "FidelityFX LPM SDK manual", "url": "https://gpuopen.com/manuals/fidelityfx_sdk/fidelityfx_sdk-group__ffxlpm/", "kind": "primary" },
+        { "title": "GPUOpen-Effects/FidelityFX-LPM", "url": "https://github.com/GPUOpen-Effects/FidelityFX-LPM", "kind": "implementation" },
+        { "title": "ffx_lpm.h", "url": "https://github.com/GPUOpen-Effects/FidelityFX-LPM/blob/master/ffx-lpm/ffx_lpm.h", "kind": "implementation" }
+      ],
+      "snapshots": ["snapshots/ffx_lpm.h", "snapshots/LPMPS.glsl", "snapshots/LPM_doc.pdf", "snapshots/fidelityfx-lpm-readme.md"]
+    }
+  ]
+}
