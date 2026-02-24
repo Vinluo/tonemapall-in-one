@@ -1,9 +1,12 @@
 import type {
+  CompareMode,
   DemoInstance,
   DemoOptions,
   FloatImage,
+  InputColorSpace,
   InputSource,
   RenderState,
+  TonemapOperator,
   ViewMode
 } from './types';
 import {
@@ -12,14 +15,32 @@ import {
   createRampPattern,
   createStepWedgePattern
 } from './core/patterns';
-import { loadHdrAsFloatImage } from './core/hdr-loader';
+import { loadExrAsFloatImage, loadHdrAsFloatImage } from './core/hdr-loader';
 import { LinearRenderer } from './core/webgl';
 import { createMinimalControls, type ControlsHandle } from './ui/minimal-controls';
 
-const DEFAULTS: Required<Pick<DemoOptions, 'initialInput' | 'initialView' | 'initialExposure' | 'showControls'>> = {
+const DEFAULTS: Required<
+  Pick<
+    DemoOptions,
+    | 'initialInput'
+    | 'initialView'
+    | 'initialExposure'
+    | 'initialTonemapA'
+    | 'initialTonemapB'
+    | 'initialCompareMode'
+    | 'initialSplit'
+    | 'initialInputColorSpace'
+    | 'showControls'
+  >
+> = {
   initialInput: 'ramp',
   initialView: 'srgbPreview',
   initialExposure: 0,
+  initialTonemapA: 'none',
+  initialTonemapB: 'acesFitted',
+  initialCompareMode: 'single',
+  initialSplit: 0.5,
+  initialInputColorSpace: 'linearSrgb',
   showControls: true
 };
 
@@ -30,12 +51,47 @@ const viewToIndex: Record<ViewMode, number> = {
   channelInspect: 3
 };
 
+const tonemapToIndex: Record<TonemapOperator, number> = {
+  none: 0,
+  acesFitted: 1,
+  reinhard: 2,
+  agx: 3,
+  agxPunchy: 4
+};
+
+const compareToIndex: Record<CompareMode, number> = {
+  single: 0,
+  splitAB: 1
+};
+
+const inputColorSpaceToIndex: Record<InputColorSpace, number> = {
+  linearSrgb: 0,
+  acesCg: 1
+};
+
 const hdrPath: Record<'hdr01' | 'hdr02', string> = {
   hdr01: '/assets/hdr/test_scene_01.hdr',
   hdr02: '/assets/hdr/test_scene_02.hdr'
 };
 
-function createPattern(input: Exclude<InputSource, 'hdr01' | 'hdr02'>): FloatImage {
+const exrPath: Record<'exr01' | 'exr02' | 'exr03', string> = {
+  exr01: '/assets/exr/Carrots.exr',
+  exr02: '/assets/exr/StillLife.exr',
+  exr03: '/assets/exr/Kapaa.exr'
+};
+
+type FileInputSource = keyof typeof hdrPath | keyof typeof exrPath;
+type PatternInputSource = Exclude<InputSource, FileInputSource>;
+
+function isHdrInput(input: InputSource): input is keyof typeof hdrPath {
+  return input === 'hdr01' || input === 'hdr02';
+}
+
+function isExrInput(input: InputSource): input is keyof typeof exrPath {
+  return input === 'exr01' || input === 'exr02' || input === 'exr03';
+}
+
+function createPattern(input: PatternInputSource): FloatImage {
   switch (input) {
     case 'ramp':
       return createRampPattern();
@@ -88,6 +144,11 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       async setInput(): Promise<void> {},
       setView(): void {},
       setExposure(): void {},
+      setTonemapA(): void {},
+      setTonemapB(): void {},
+      setCompareMode(): void {},
+      setSplit(): void {},
+      setInputColorSpace(): void {},
       resize(): void {},
       destroy(): void {}
     };
@@ -97,6 +158,11 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
     input: options.initialInput ?? DEFAULTS.initialInput,
     view: options.initialView ?? DEFAULTS.initialView,
     exposure: options.initialExposure ?? DEFAULTS.initialExposure,
+    tonemapA: options.initialTonemapA ?? DEFAULTS.initialTonemapA,
+    tonemapB: options.initialTonemapB ?? DEFAULTS.initialTonemapB,
+    compareMode: options.initialCompareMode ?? DEFAULTS.initialCompareMode,
+    split: options.initialSplit ?? DEFAULTS.initialSplit,
+    inputColorSpace: options.initialInputColorSpace ?? DEFAULTS.initialInputColorSpace,
     channel: 0
   };
 
@@ -114,12 +180,21 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
   const applyInput = async (input: InputSource): Promise<void> => {
     state.input = input;
 
-    if (input === 'hdr01' || input === 'hdr02') {
+    if (isHdrInput(input)) {
       try {
         const image = await loadHdrAsFloatImage(hdrPath[input]);
         renderer.setInput(image);
       } catch (err) {
         console.warn('[linear-demo] failed to load HDR, fallback to ramp', err);
+        state.input = 'ramp';
+        renderer.setInput(createPattern('ramp'));
+      }
+    } else if (isExrInput(input)) {
+      try {
+        const image = await loadExrAsFloatImage(exrPath[input]);
+        renderer.setInput(image);
+      } catch (err) {
+        console.warn('[linear-demo] failed to load EXR, fallback to ramp', err);
         state.input = 'ramp';
         renderer.setInput(createPattern('ramp'));
       }
@@ -145,12 +220,33 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       onExposureChange(exposure) {
         state.exposure = exposure;
       },
+      onTonemapAChange(op) {
+        state.tonemapA = op;
+      },
+      onTonemapBChange(op) {
+        state.tonemapB = op;
+      },
+      onCompareModeChange(mode) {
+        state.compareMode = mode;
+        controls?.setState(state);
+      },
+      onSplitChange(split) {
+        state.split = split;
+      },
+      onInputColorSpaceChange(space) {
+        state.inputColorSpace = space;
+      },
       onChannelChange(channel) {
         state.channel = channel;
       },
       onReset() {
         state.view = options.initialView ?? DEFAULTS.initialView;
         state.exposure = options.initialExposure ?? DEFAULTS.initialExposure;
+        state.tonemapA = options.initialTonemapA ?? DEFAULTS.initialTonemapA;
+        state.tonemapB = options.initialTonemapB ?? DEFAULTS.initialTonemapB;
+        state.compareMode = options.initialCompareMode ?? DEFAULTS.initialCompareMode;
+        state.split = options.initialSplit ?? DEFAULTS.initialSplit;
+        state.inputColorSpace = options.initialInputColorSpace ?? DEFAULTS.initialInputColorSpace;
         state.channel = 0;
         void applyInput(options.initialInput ?? DEFAULTS.initialInput);
         controls?.setState(state);
@@ -160,7 +256,16 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
 
   let rafId = 0;
   const frame = (): void => {
-    renderer.render(viewToIndex[state.view], state.exposure, state.channel);
+    renderer.render(
+      viewToIndex[state.view],
+      state.exposure,
+      state.channel,
+      tonemapToIndex[state.tonemapA],
+      tonemapToIndex[state.tonemapB],
+      compareToIndex[state.compareMode],
+      state.split,
+      inputColorSpaceToIndex[state.inputColorSpace]
+    );
     rafId = window.requestAnimationFrame(frame);
   };
   frame();
@@ -194,6 +299,41 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
         return;
       }
       state.exposure = exposureEv;
+      controls?.setState(state);
+    },
+    setTonemapA(op: TonemapOperator): void {
+      if (destroyed) {
+        return;
+      }
+      state.tonemapA = op;
+      controls?.setState(state);
+    },
+    setTonemapB(op: TonemapOperator): void {
+      if (destroyed) {
+        return;
+      }
+      state.tonemapB = op;
+      controls?.setState(state);
+    },
+    setCompareMode(mode: CompareMode): void {
+      if (destroyed) {
+        return;
+      }
+      state.compareMode = mode;
+      controls?.setState(state);
+    },
+    setSplit(split: number): void {
+      if (destroyed) {
+        return;
+      }
+      state.split = Math.min(0.95, Math.max(0.05, split));
+      controls?.setState(state);
+    },
+    setInputColorSpace(space: InputColorSpace): void {
+      if (destroyed) {
+        return;
+      }
+      state.inputColorSpace = space;
       controls?.setState(state);
     },
     resize(width?: number, height?: number, dpr?: number): void {

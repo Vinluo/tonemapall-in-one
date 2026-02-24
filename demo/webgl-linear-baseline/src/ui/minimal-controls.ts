@@ -1,9 +1,14 @@
-import type { InputSource, ViewMode } from '../types';
+import type { CompareMode, InputColorSpace, InputSource, TonemapOperator, ViewMode } from '../types';
 
 export interface ControlCallbacks {
   onInputChange(input: InputSource): void;
   onViewChange(view: ViewMode): void;
   onExposureChange(exposure: number): void;
+  onTonemapAChange(op: TonemapOperator): void;
+  onTonemapBChange(op: TonemapOperator): void;
+  onCompareModeChange(mode: CompareMode): void;
+  onSplitChange(split: number): void;
+  onInputColorSpaceChange(space: InputColorSpace): void;
   onChannelChange(channel: 0 | 1 | 2): void;
   onReset(): void;
 }
@@ -12,6 +17,11 @@ export interface ControlsState {
   input: InputSource;
   view: ViewMode;
   exposure: number;
+  tonemapA: TonemapOperator;
+  tonemapB: TonemapOperator;
+  compareMode: CompareMode;
+  split: number;
+  inputColorSpace: InputColorSpace;
   channel: 0 | 1 | 2;
 }
 
@@ -26,7 +36,10 @@ const inputOptions: Array<{ value: InputSource; label: string }> = [
   { value: 'stepWedge', label: 'Step Wedge' },
   { value: 'highlightStress', label: 'Highlight Stress' },
   { value: 'hdr01', label: 'HDR Scene 01' },
-  { value: 'hdr02', label: 'HDR Scene 02' }
+  { value: 'hdr02', label: 'HDR Scene 02' },
+  { value: 'exr01', label: 'EXR Carrots' },
+  { value: 'exr02', label: 'EXR StillLife' },
+  { value: 'exr03', label: 'EXR Kapaa' }
 ];
 
 const viewOptions: Array<{ value: ViewMode; label: string }> = [
@@ -34,6 +47,24 @@ const viewOptions: Array<{ value: ViewMode; label: string }> = [
   { value: 'linearFalseColor', label: 'Linear False Color' },
   { value: 'luminanceHeatmap', label: 'Luminance Heatmap' },
   { value: 'channelInspect', label: 'Channel Inspect' }
+];
+
+const tonemapOptions: Array<{ value: TonemapOperator; label: string }> = [
+  { value: 'none', label: 'None (Linear)' },
+  { value: 'acesFitted', label: 'ACES Fitted' },
+  { value: 'reinhard', label: 'Reinhard' },
+  { value: 'agx', label: 'AgX' },
+  { value: 'agxPunchy', label: 'AgX Punchy' }
+];
+
+const compareOptions: Array<{ value: CompareMode; label: string }> = [
+  { value: 'single', label: 'Single View' },
+  { value: 'splitAB', label: 'Split A/B' }
+];
+
+const inputColorSpaceOptions: Array<{ value: InputColorSpace; label: string }> = [
+  { value: 'linearSrgb', label: 'Linear sRGB' },
+  { value: 'acesCg', label: 'ACEScg (AP1)' }
 ];
 
 function createLabel(text: string): HTMLLabelElement {
@@ -112,6 +143,78 @@ export function createMinimalControls(
   exposureWrap.appendChild(exposureReadout);
   exposureLabel.appendChild(exposureWrap);
 
+  const tonemapALabel = createLabel('Tonemap A');
+  const tonemapASelect = document.createElement('select');
+  for (const option of tonemapOptions) {
+    const o = document.createElement('option');
+    o.value = option.value;
+    o.textContent = option.label;
+    tonemapASelect.appendChild(o);
+  }
+  tonemapASelect.value = initial.tonemapA;
+  tonemapASelect.onchange = () => callbacks.onTonemapAChange(tonemapASelect.value as TonemapOperator);
+  tonemapALabel.appendChild(tonemapASelect);
+
+  const tonemapBLabel = createLabel('Tonemap B');
+  const tonemapBSelect = document.createElement('select');
+  for (const option of tonemapOptions) {
+    const o = document.createElement('option');
+    o.value = option.value;
+    o.textContent = option.label;
+    tonemapBSelect.appendChild(o);
+  }
+  tonemapBSelect.value = initial.tonemapB;
+  tonemapBSelect.onchange = () => callbacks.onTonemapBChange(tonemapBSelect.value as TonemapOperator);
+  tonemapBLabel.appendChild(tonemapBSelect);
+
+  const compareLabel = createLabel('Compare');
+  const compareSelect = document.createElement('select');
+  for (const option of compareOptions) {
+    const o = document.createElement('option');
+    o.value = option.value;
+    o.textContent = option.label;
+    compareSelect.appendChild(o);
+  }
+  compareSelect.value = initial.compareMode;
+  compareSelect.onchange = () => callbacks.onCompareModeChange(compareSelect.value as CompareMode);
+  compareLabel.appendChild(compareSelect);
+
+  const splitLabel = createLabel('Split (A|B)');
+  const splitWrap = document.createElement('div');
+  splitWrap.style.display = 'grid';
+  splitWrap.style.gridTemplateColumns = '1fr auto';
+  splitWrap.style.gap = '8px';
+  const splitSlider = document.createElement('input');
+  splitSlider.type = 'range';
+  splitSlider.min = '0.05';
+  splitSlider.max = '0.95';
+  splitSlider.step = '0.01';
+  splitSlider.value = String(initial.split);
+  const splitReadout = document.createElement('span');
+  splitReadout.style.minWidth = '48px';
+  splitReadout.style.textAlign = 'right';
+  splitReadout.textContent = initial.split.toFixed(2);
+  splitSlider.oninput = () => {
+    const v = Number(splitSlider.value);
+    splitReadout.textContent = v.toFixed(2);
+    callbacks.onSplitChange(v);
+  };
+  splitWrap.appendChild(splitSlider);
+  splitWrap.appendChild(splitReadout);
+  splitLabel.appendChild(splitWrap);
+
+  const inputColorSpaceLabel = createLabel('Input Color Space');
+  const inputColorSpaceSelect = document.createElement('select');
+  for (const option of inputColorSpaceOptions) {
+    const o = document.createElement('option');
+    o.value = option.value;
+    o.textContent = option.label;
+    inputColorSpaceSelect.appendChild(o);
+  }
+  inputColorSpaceSelect.value = initial.inputColorSpace;
+  inputColorSpaceSelect.onchange = () => callbacks.onInputColorSpaceChange(inputColorSpaceSelect.value as InputColorSpace);
+  inputColorSpaceLabel.appendChild(inputColorSpaceSelect);
+
   const channelLabel = createLabel('Channel');
   const channelSelect = document.createElement('select');
   const channels: Array<{ value: 0 | 1 | 2; label: string }> = [
@@ -139,10 +242,24 @@ export function createMinimalControls(
   panel.appendChild(inputLabel);
   panel.appendChild(viewLabel);
   panel.appendChild(exposureLabel);
+  panel.appendChild(compareLabel);
+  panel.appendChild(tonemapALabel);
+  panel.appendChild(tonemapBLabel);
+  panel.appendChild(splitLabel);
+  panel.appendChild(inputColorSpaceLabel);
   panel.appendChild(channelLabel);
   panel.appendChild(resetButton);
 
   container.appendChild(panel);
+
+  const syncCompareUi = (mode: CompareMode): void => {
+    const splitOn = mode === 'splitAB';
+    tonemapBSelect.disabled = !splitOn;
+    splitSlider.disabled = !splitOn;
+    splitReadout.style.opacity = splitOn ? '1' : '0.5';
+  };
+
+  syncCompareUi(initial.compareMode);
 
   return {
     setState(state: ControlsState): void {
@@ -150,12 +267,24 @@ export function createMinimalControls(
       viewSelect.value = state.view;
       exposureSlider.value = String(state.exposure);
       exposureReadout.textContent = state.exposure.toFixed(2);
+      tonemapASelect.value = state.tonemapA;
+      tonemapBSelect.value = state.tonemapB;
+      compareSelect.value = state.compareMode;
+      splitSlider.value = String(state.split);
+      splitReadout.textContent = state.split.toFixed(2);
+      inputColorSpaceSelect.value = state.inputColorSpace;
       channelSelect.value = String(state.channel);
+      syncCompareUi(state.compareMode);
     },
     destroy(): void {
       inputSelect.onchange = null;
       viewSelect.onchange = null;
       exposureSlider.oninput = null;
+      tonemapASelect.onchange = null;
+      tonemapBSelect.onchange = null;
+      compareSelect.onchange = null;
+      splitSlider.oninput = null;
+      inputColorSpaceSelect.onchange = null;
       channelSelect.onchange = null;
       resetButton.onclick = null;
       panel.remove();

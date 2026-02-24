@@ -1,4 +1,5 @@
 import parseHdr from 'parse-hdr';
+import { readExr } from 'hdrify';
 import type { FloatImage } from '../types';
 
 export async function loadHdrAsFloatImage(url: string): Promise<FloatImage> {
@@ -14,5 +15,20 @@ export async function loadHdrAsFloatImage(url: string): Promise<FloatImage> {
     width: parsed.shape[0],
     height: parsed.shape[1],
     data: parsed.data
+  };
+}
+
+export async function loadExrAsFloatImage(url: string): Promise<FloatImage> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to load EXR: ${url} (${res.status})`);
+  }
+
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const decoded = readExr(bytes);
+  return {
+    width: decoded.width,
+    height: decoded.height,
+    data: decoded.data
   };
 }

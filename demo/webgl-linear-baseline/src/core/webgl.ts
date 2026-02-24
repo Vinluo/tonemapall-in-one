@@ -56,6 +56,11 @@ export class LinearRenderer {
   private readonly uViewMode: WebGLUniformLocation;
   private readonly uExposure: WebGLUniformLocation;
   private readonly uChannel: WebGLUniformLocation;
+  private readonly uTonemapA: WebGLUniformLocation;
+  private readonly uTonemapB: WebGLUniformLocation;
+  private readonly uCompareMode: WebGLUniformLocation;
+  private readonly uSplit: WebGLUniformLocation;
+  private readonly uInputColorSpace: WebGLUniformLocation;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false });
@@ -99,8 +104,13 @@ export class LinearRenderer {
     const uViewMode = gl.getUniformLocation(this.program, 'uViewMode');
     const uExposure = gl.getUniformLocation(this.program, 'uExposure');
     const uChannel = gl.getUniformLocation(this.program, 'uChannel');
+    const uTonemapA = gl.getUniformLocation(this.program, 'uTonemapA');
+    const uTonemapB = gl.getUniformLocation(this.program, 'uTonemapB');
+    const uCompareMode = gl.getUniformLocation(this.program, 'uCompareMode');
+    const uSplit = gl.getUniformLocation(this.program, 'uSplit');
+    const uInputColorSpace = gl.getUniformLocation(this.program, 'uInputColorSpace');
 
-    if (!uInputTex || !uViewMode || !uExposure || !uChannel) {
+    if (!uInputTex || !uViewMode || !uExposure || !uChannel || !uTonemapA || !uTonemapB || !uCompareMode || !uSplit || !uInputColorSpace) {
       throw new Error('Failed to locate required uniforms.');
     }
 
@@ -108,6 +118,11 @@ export class LinearRenderer {
     this.uViewMode = uViewMode;
     this.uExposure = uExposure;
     this.uChannel = uChannel;
+    this.uTonemapA = uTonemapA;
+    this.uTonemapB = uTonemapB;
+    this.uCompareMode = uCompareMode;
+    this.uSplit = uSplit;
+    this.uInputColorSpace = uInputColorSpace;
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -137,7 +152,16 @@ export class LinearRenderer {
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
-  render(viewMode: number, exposure: number, channel: number): void {
+  render(
+    viewMode: number,
+    exposure: number,
+    channel: number,
+    tonemapA: number,
+    tonemapB: number,
+    compareMode: number,
+    split: number,
+    inputColorSpace: number
+  ): void {
     const gl = this.gl;
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -151,6 +175,11 @@ export class LinearRenderer {
     gl.uniform1i(this.uViewMode, viewMode);
     gl.uniform1f(this.uExposure, exposure);
     gl.uniform1i(this.uChannel, channel);
+    gl.uniform1i(this.uTonemapA, tonemapA);
+    gl.uniform1i(this.uTonemapB, tonemapB);
+    gl.uniform1i(this.uCompareMode, compareMode);
+    gl.uniform1f(this.uSplit, split);
+    gl.uniform1i(this.uInputColorSpace, inputColorSpace);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
