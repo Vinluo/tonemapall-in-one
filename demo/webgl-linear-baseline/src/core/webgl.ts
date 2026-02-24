@@ -1,3 +1,4 @@
+import type { Lut3DData } from './lut-loader';
 import type { FloatImage } from '../types';
 import { fullscreenVertexSource, linearDebugFragmentSource } from './shaders';
 
@@ -46,12 +47,65 @@ function createProgram(gl: WebGL2RenderingContext, vertexSource: string, fragmen
   return program;
 }
 
+function create3DTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const tex = gl.createTexture();
+  if (!tex) {
+    throw new Error('Failed to allocate 3D texture.');
+  }
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGB16F, 1, 1, 1, 0, gl.RGB, gl.FLOAT, new Float32Array([0, 0, 0]));
+  gl.bindTexture(gl.TEXTURE_3D, null);
+  return tex;
+}
+
+function uploadLut3D(gl: WebGL2RenderingContext, tex: WebGLTexture, lut: Lut3DData): void {
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  if (lut.format === 'rgb9e5') {
+    gl.texImage3D(
+      gl.TEXTURE_3D,
+      0,
+      gl.RGB9_E5,
+      lut.width,
+      lut.height,
+      lut.depth,
+      0,
+      gl.RGB,
+      gl.UNSIGNED_INT_5_9_9_9_REV,
+      lut.data as Uint32Array
+    );
+  } else {
+    gl.texImage3D(
+      gl.TEXTURE_3D,
+      0,
+      gl.RGB32F,
+      lut.width,
+      lut.height,
+      lut.depth,
+      0,
+      gl.RGB,
+      gl.FLOAT,
+      lut.data as Float32Array
+    );
+  }
+  gl.bindTexture(gl.TEXTURE_3D, null);
+}
+
 export class LinearRenderer {
   private readonly gl: WebGL2RenderingContext;
   private readonly program: WebGLProgram;
   private readonly vao: WebGLVertexArrayObject;
   private readonly vbo: WebGLBuffer;
   private readonly texture: WebGLTexture;
+  private readonly tonyLutTex: WebGLTexture;
+  private readonly flimDefaultLutTex: WebGLTexture;
+  private readonly flimNostalgiaLutTex: WebGLTexture;
+  private readonly flimSilverLutTex: WebGLTexture;
   private readonly uInputTex: WebGLUniformLocation;
   private readonly uViewMode: WebGLUniformLocation;
   private readonly uExposure: WebGLUniformLocation;
@@ -61,6 +115,17 @@ export class LinearRenderer {
   private readonly uCompareMode: WebGLUniformLocation;
   private readonly uSplit: WebGLUniformLocation;
   private readonly uInputColorSpace: WebGLUniformLocation;
+  private readonly uTonemapParamsA: WebGLUniformLocation;
+  private readonly uTonemapParamsB: WebGLUniformLocation;
+  private readonly uTonyLut: WebGLUniformLocation;
+  private readonly uFlimDefaultLut: WebGLUniformLocation;
+  private readonly uFlimNostalgiaLut: WebGLUniformLocation;
+  private readonly uFlimSilverLut: WebGLUniformLocation;
+  private readonly uTonyLutReady: WebGLUniformLocation;
+  private readonly uFlimLutReady: WebGLUniformLocation;
+
+  private tonyLutReady = false;
+  private flimLutReady = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false });
@@ -100,6 +165,11 @@ export class LinearRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindTexture(gl.TEXTURE_2D, null);
 
+    this.tonyLutTex = create3DTexture(gl);
+    this.flimDefaultLutTex = create3DTexture(gl);
+    this.flimNostalgiaLutTex = create3DTexture(gl);
+    this.flimSilverLutTex = create3DTexture(gl);
+
     const uInputTex = gl.getUniformLocation(this.program, 'uInputTex');
     const uViewMode = gl.getUniformLocation(this.program, 'uViewMode');
     const uExposure = gl.getUniformLocation(this.program, 'uExposure');
@@ -109,8 +179,34 @@ export class LinearRenderer {
     const uCompareMode = gl.getUniformLocation(this.program, 'uCompareMode');
     const uSplit = gl.getUniformLocation(this.program, 'uSplit');
     const uInputColorSpace = gl.getUniformLocation(this.program, 'uInputColorSpace');
+    const uTonemapParamsA = gl.getUniformLocation(this.program, 'uTonemapParamsA[0]');
+    const uTonemapParamsB = gl.getUniformLocation(this.program, 'uTonemapParamsB[0]');
+    const uTonyLut = gl.getUniformLocation(this.program, 'uTonyLut');
+    const uFlimDefaultLut = gl.getUniformLocation(this.program, 'uFlimDefaultLut');
+    const uFlimNostalgiaLut = gl.getUniformLocation(this.program, 'uFlimNostalgiaLut');
+    const uFlimSilverLut = gl.getUniformLocation(this.program, 'uFlimSilverLut');
+    const uTonyLutReady = gl.getUniformLocation(this.program, 'uTonyLutReady');
+    const uFlimLutReady = gl.getUniformLocation(this.program, 'uFlimLutReady');
 
-    if (!uInputTex || !uViewMode || !uExposure || !uChannel || !uTonemapA || !uTonemapB || !uCompareMode || !uSplit || !uInputColorSpace) {
+    if (
+      !uInputTex ||
+      !uViewMode ||
+      !uExposure ||
+      !uChannel ||
+      !uTonemapA ||
+      !uTonemapB ||
+      !uCompareMode ||
+      !uSplit ||
+      !uInputColorSpace ||
+      !uTonemapParamsA ||
+      !uTonemapParamsB ||
+      !uTonyLut ||
+      !uFlimDefaultLut ||
+      !uFlimNostalgiaLut ||
+      !uFlimSilverLut ||
+      !uTonyLutReady ||
+      !uFlimLutReady
+    ) {
       throw new Error('Failed to locate required uniforms.');
     }
 
@@ -123,6 +219,14 @@ export class LinearRenderer {
     this.uCompareMode = uCompareMode;
     this.uSplit = uSplit;
     this.uInputColorSpace = uInputColorSpace;
+    this.uTonemapParamsA = uTonemapParamsA;
+    this.uTonemapParamsB = uTonemapParamsB;
+    this.uTonyLut = uTonyLut;
+    this.uFlimDefaultLut = uFlimDefaultLut;
+    this.uFlimNostalgiaLut = uFlimNostalgiaLut;
+    this.uFlimSilverLut = uFlimSilverLut;
+    this.uTonyLutReady = uTonyLutReady;
+    this.uFlimLutReady = uFlimLutReady;
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -152,6 +256,22 @@ export class LinearRenderer {
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
+  setTonyLut(lut: Lut3DData): void {
+    uploadLut3D(this.gl, this.tonyLutTex, lut);
+    this.tonyLutReady = true;
+  }
+
+  setFlimLut(preset: 'default' | 'nostalgia' | 'silver', lut: Lut3DData): void {
+    if (preset === 'default') {
+      uploadLut3D(this.gl, this.flimDefaultLutTex, lut);
+    } else if (preset === 'nostalgia') {
+      uploadLut3D(this.gl, this.flimNostalgiaLutTex, lut);
+    } else {
+      uploadLut3D(this.gl, this.flimSilverLutTex, lut);
+    }
+    this.flimLutReady = true;
+  }
+
   render(
     viewMode: number,
     exposure: number,
@@ -160,7 +280,9 @@ export class LinearRenderer {
     tonemapB: number,
     compareMode: number,
     split: number,
-    inputColorSpace: number
+    inputColorSpace: number,
+    tonemapParamsA: Float32Array,
+    tonemapParamsB: Float32Array
   ): void {
     const gl = this.gl;
     gl.clearColor(0, 0, 0, 1);
@@ -171,7 +293,25 @@ export class LinearRenderer {
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_3D, this.tonyLutTex);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_3D, this.flimDefaultLutTex);
+
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_3D, this.flimNostalgiaLutTex);
+
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_3D, this.flimSilverLutTex);
+
     gl.uniform1i(this.uInputTex, 0);
+    gl.uniform1i(this.uTonyLut, 1);
+    gl.uniform1i(this.uFlimDefaultLut, 2);
+    gl.uniform1i(this.uFlimNostalgiaLut, 3);
+    gl.uniform1i(this.uFlimSilverLut, 4);
+
     gl.uniform1i(this.uViewMode, viewMode);
     gl.uniform1f(this.uExposure, exposure);
     gl.uniform1i(this.uChannel, channel);
@@ -180,16 +320,25 @@ export class LinearRenderer {
     gl.uniform1i(this.uCompareMode, compareMode);
     gl.uniform1f(this.uSplit, split);
     gl.uniform1i(this.uInputColorSpace, inputColorSpace);
+    gl.uniform4fv(this.uTonemapParamsA, tonemapParamsA);
+    gl.uniform4fv(this.uTonemapParamsB, tonemapParamsB);
+    gl.uniform1i(this.uTonyLutReady, this.tonyLutReady ? 1 : 0);
+    gl.uniform1i(this.uFlimLutReady, this.flimLutReady ? 1 : 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindTexture(gl.TEXTURE_3D, null);
     gl.bindVertexArray(null);
   }
 
   destroy(): void {
     const gl = this.gl;
     gl.deleteTexture(this.texture);
+    gl.deleteTexture(this.tonyLutTex);
+    gl.deleteTexture(this.flimDefaultLutTex);
+    gl.deleteTexture(this.flimNostalgiaLutTex);
+    gl.deleteTexture(this.flimSilverLutTex);
     gl.deleteBuffer(this.vbo);
     gl.deleteVertexArray(this.vao);
     gl.deleteProgram(this.program);

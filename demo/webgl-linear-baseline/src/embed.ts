@@ -5,8 +5,11 @@ import type {
   FloatImage,
   InputColorSpace,
   InputSource,
+  OperatorParamState,
+  OperatorSide,
   RenderState,
   TonemapOperator,
+  TonemapParams,
   ViewMode
 } from './types';
 import {
@@ -17,6 +20,21 @@ import {
 } from './core/patterns';
 import { loadExrAsFloatImage, loadHdrAsFloatImage } from './core/hdr-loader';
 import { LinearRenderer } from './core/webgl';
+import { loadFlimLut, loadTonyLut } from './core/lut-loader';
+import {
+  clearPersistedState,
+  readStateFromStorage,
+  readStateFromUrl,
+  writeState,
+  type PersistedDemoState
+} from './core/state-persistence';
+import {
+  cloneParamState,
+  createDefaultOperatorParamState,
+  mergeParamState,
+  OPERATOR_ORDER,
+  packOperatorParams
+} from './tonemap/operator-registry';
 import { createMinimalControls, type ControlsHandle } from './ui/minimal-controls';
 
 const DEFAULTS: Required<
@@ -30,6 +48,8 @@ const DEFAULTS: Required<
     | 'initialCompareMode'
     | 'initialSplit'
     | 'initialInputColorSpace'
+    | 'initialPanelVisible'
+    | 'persistState'
     | 'showControls'
   >
 > = {
@@ -41,6 +61,8 @@ const DEFAULTS: Required<
   initialCompareMode: 'single',
   initialSplit: 0.5,
   initialInputColorSpace: 'linearSrgb',
+  initialPanelVisible: false,
+  persistState: true,
   showControls: true
 };
 
@@ -56,7 +78,14 @@ const tonemapToIndex: Record<TonemapOperator, number> = {
   acesFitted: 1,
   reinhard: 2,
   agx: 3,
-  agxPunchy: 4
+  agxGolden: 4,
+  agxPunchy: 5,
+  uchimura: 6,
+  hejl: 7,
+  gt7: 8,
+  tonyMcMapface: 9,
+  flim: 10,
+  amdLpm: 11
 };
 
 const compareToIndex: Record<CompareMode, number> = {
@@ -80,6 +109,13 @@ const exrPath: Record<'exr01' | 'exr02' | 'exr03', string> = {
   exr03: '/assets/exr/Kapaa.exr'
 };
 
+const tonyLutPath = '/assets/lut/tony_mc_mapface.dds';
+const flimLutPath = {
+  default: '/assets/lut/flim_default.spi3d',
+  nostalgia: '/assets/lut/flim_nostalgia.spi3d',
+  silver: '/assets/lut/flim_silver.spi3d'
+} as const;
+
 type FileInputSource = keyof typeof hdrPath | keyof typeof exrPath;
 type PatternInputSource = Exclude<InputSource, FileInputSource>;
 
@@ -89,6 +125,10 @@ function isHdrInput(input: InputSource): input is keyof typeof hdrPath {
 
 function isExrInput(input: InputSource): input is keyof typeof exrPath {
   return input === 'exr01' || input === 'exr02' || input === 'exr03';
+}
+
+function isTonemapOperator(input: unknown): input is TonemapOperator {
+  return typeof input === 'string' && OPERATOR_ORDER.includes(input as TonemapOperator);
 }
 
 function createPattern(input: PatternInputSource): FloatImage {
@@ -125,6 +165,71 @@ function showFallback(container: HTMLElement, message: string): void {
   container.appendChild(node);
 }
 
+function getWebglDiagnosticMessage(): string {
+  const canvas = document.createElement('canvas');
+  const gl2 = canvas.getContext('webgl2');
+  if (gl2) {
+    return 'WebGL2 context exists, but renderer initialization failed. Open DevTools Console for shader/uniform details.';
+  }
+
+  const gl1 = canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl');
+  if (gl1) {
+    return 'WebGL2 is unavailable, but WebGL1 is available. This demo is currently WebGL2-only.';
+  }
+
+  return 'WebGL is unavailable in this browser context. Check browser GPU settings, iframe sandbox policy, or private/incognito restrictions.';
+}
+
+function makePersistedState(state: RenderState): PersistedDemoState {
+  return {
+    input: state.input,
+    view: state.view,
+    exposure: state.exposure,
+    tonemapA: state.tonemapA,
+    tonemapB: state.tonemapB,
+    compareMode: state.compareMode,
+    split: state.split,
+    inputColorSpace: state.inputColorSpace,
+    paramsA: cloneParamState(state.paramsA),
+    paramsB: cloneParamState(state.paramsB),
+    panelVisible: state.panelVisible
+  };
+}
+
+function applyPersistedState(base: RenderState, persisted: PersistedDemoState | null): RenderState {
+  if (!persisted) {
+    return base;
+  }
+  return {
+    ...base,
+    input: persisted.input ?? base.input,
+    view: persisted.view ?? base.view,
+    exposure: Number.isFinite(persisted.exposure) ? persisted.exposure : base.exposure,
+    tonemapA: isTonemapOperator(persisted.tonemapA) ? persisted.tonemapA : base.tonemapA,
+    tonemapB: isTonemapOperator(persisted.tonemapB) ? persisted.tonemapB : base.tonemapB,
+    compareMode: persisted.compareMode ?? base.compareMode,
+    split: Number.isFinite(persisted.split) ? persisted.split : base.split,
+    inputColorSpace: persisted.inputColorSpace ?? base.inputColorSpace,
+    paramsA: mergeParamState(base.paramsA, persisted.paramsA),
+    paramsB: mergeParamState(base.paramsB, persisted.paramsB),
+    panelVisible: typeof persisted.panelVisible === 'boolean' ? persisted.panelVisible : base.panelVisible
+  };
+}
+
+function mergeSideParams(
+  state: OperatorParamState,
+  op: TonemapOperator,
+  partial: Partial<TonemapParams>
+): OperatorParamState {
+  return {
+    ...state,
+    [op]: {
+      ...state[op],
+      ...partial
+    }
+  };
+}
+
 export function createLinearDemo(container: HTMLElement, options: DemoOptions = {}): DemoInstance {
   container.style.position = container.style.position || 'relative';
 
@@ -137,9 +242,10 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
   let renderer: LinearRenderer;
   try {
     renderer = new LinearRenderer(canvas);
-  } catch {
+  } catch (err) {
     canvas.remove();
-    showFallback(container, 'WebGL2 is not supported in this environment.');
+    const detail = err instanceof Error ? ` Detail: ${err.message}` : '';
+    showFallback(container, `${getWebglDiagnosticMessage()}${detail}`);
     return {
       async setInput(): Promise<void> {},
       setView(): void {},
@@ -149,12 +255,19 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       setCompareMode(): void {},
       setSplit(): void {},
       setInputColorSpace(): void {},
+      setTonemapParams(): void {},
+      resetTonemapParams(): void {},
+      setControlsVisible(): void {},
+      toggleControls(): void {},
       resize(): void {},
       destroy(): void {}
     };
   }
 
-  const state: RenderState = {
+  const defaultsA = mergeParamState(createDefaultOperatorParamState(), options.initialParamsA);
+  const defaultsB = mergeParamState(createDefaultOperatorParamState(), options.initialParamsB);
+
+  const baseState: RenderState = {
     input: options.initialInput ?? DEFAULTS.initialInput,
     view: options.initialView ?? DEFAULTS.initialView,
     exposure: options.initialExposure ?? DEFAULTS.initialExposure,
@@ -163,14 +276,28 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
     compareMode: options.initialCompareMode ?? DEFAULTS.initialCompareMode,
     split: options.initialSplit ?? DEFAULTS.initialSplit,
     inputColorSpace: options.initialInputColorSpace ?? DEFAULTS.initialInputColorSpace,
+    paramsA: defaultsA,
+    paramsB: defaultsB,
+    panelVisible: options.initialPanelVisible ?? DEFAULTS.initialPanelVisible,
     channel: 0
   };
+
+  const enablePersist = options.persistState ?? DEFAULTS.persistState;
+  const persisted = enablePersist ? (readStateFromUrl() ?? readStateFromStorage()) : null;
+  const state: RenderState = applyPersistedState(baseState, persisted);
 
   const syncSize = (): void => {
     const { w, h, dpr } = computeCssSize(container, options);
     canvas.style.width = `${Math.max(1, Math.floor(w))}px`;
     canvas.style.height = `${Math.max(1, Math.floor(h))}px`;
     renderer.resize(w * dpr, h * dpr);
+  };
+
+  const persistCurrentState = (): void => {
+    if (!enablePersist) {
+      return;
+    }
+    writeState(makePersistedState(state));
   };
 
   syncSize();
@@ -203,10 +330,41 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
     }
 
     controls?.setState(state);
+    persistCurrentState();
+  };
+
+  let tonyLutOk = false;
+  let flimLutOk = false;
+
+  const initLuts = async (): Promise<void> => {
+    try {
+      const tony = await loadTonyLut(tonyLutPath);
+      renderer.setTonyLut(tony);
+      tonyLutOk = true;
+    } catch (err) {
+      console.warn('[linear-demo] failed to load Tony LUT. Tony operator will fallback to none.', err);
+      tonyLutOk = false;
+    }
+
+    try {
+      const [defLut, nostalgiaLut, silverLut] = await Promise.all([
+        loadFlimLut(flimLutPath.default),
+        loadFlimLut(flimLutPath.nostalgia),
+        loadFlimLut(flimLutPath.silver)
+      ]);
+      renderer.setFlimLut('default', defLut);
+      renderer.setFlimLut('nostalgia', nostalgiaLut);
+      renderer.setFlimLut('silver', silverLut);
+      flimLutOk = true;
+    } catch (err) {
+      console.warn('[linear-demo] failed to load flim LUTs. flim operator will fallback to none.', err);
+      flimLutOk = false;
+    }
   };
 
   renderer.setInput(createPattern('ramp'));
   void applyInput(state.input);
+  void initLuts();
 
   if (options.showControls ?? DEFAULTS.showControls) {
     controls = createMinimalControls(container, state, {
@@ -216,28 +374,54 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       onViewChange(view) {
         state.view = view;
         controls?.setState(state);
+        persistCurrentState();
       },
       onExposureChange(exposure) {
         state.exposure = exposure;
+        persistCurrentState();
       },
       onTonemapAChange(op) {
         state.tonemapA = op;
+        controls?.setState(state);
+        persistCurrentState();
       },
       onTonemapBChange(op) {
         state.tonemapB = op;
+        controls?.setState(state);
+        persistCurrentState();
+      },
+      onTonemapParamsChange(side, partial) {
+        if (side === 'A') {
+          state.paramsA = mergeSideParams(state.paramsA, state.tonemapA, partial);
+        } else {
+          state.paramsB = mergeSideParams(state.paramsB, state.tonemapB, partial);
+        }
+        persistCurrentState();
       },
       onCompareModeChange(mode) {
         state.compareMode = mode;
         controls?.setState(state);
+        persistCurrentState();
       },
       onSplitChange(split) {
         state.split = split;
+        persistCurrentState();
       },
       onInputColorSpaceChange(space) {
         state.inputColorSpace = space;
+        persistCurrentState();
       },
       onChannelChange(channel) {
         state.channel = channel;
+        persistCurrentState();
+      },
+      onCopyShareUrl() {
+        persistCurrentState();
+        void navigator.clipboard?.writeText(window.location.href);
+      },
+      onVisibilityChange(visible) {
+        state.panelVisible = visible;
+        persistCurrentState();
       },
       onReset() {
         state.view = options.initialView ?? DEFAULTS.initialView;
@@ -247,15 +431,53 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
         state.compareMode = options.initialCompareMode ?? DEFAULTS.initialCompareMode;
         state.split = options.initialSplit ?? DEFAULTS.initialSplit;
         state.inputColorSpace = options.initialInputColorSpace ?? DEFAULTS.initialInputColorSpace;
+        state.paramsA = mergeParamState(createDefaultOperatorParamState(), options.initialParamsA);
+        state.paramsB = mergeParamState(createDefaultOperatorParamState(), options.initialParamsB);
+        state.panelVisible = options.initialPanelVisible ?? DEFAULTS.initialPanelVisible;
         state.channel = 0;
         void applyInput(options.initialInput ?? DEFAULTS.initialInput);
         controls?.setState(state);
+        if (!enablePersist) {
+          clearPersistedState();
+        }
       }
     });
   }
 
+  const packedA = new Float32Array(16);
+  const packedB = new Float32Array(16);
+
+  const validateLutOperators = (): void => {
+    let changed = false;
+    if (!tonyLutOk && state.tonemapA === 'tonyMcMapface') {
+      state.tonemapA = 'none';
+      changed = true;
+    }
+    if (!tonyLutOk && state.tonemapB === 'tonyMcMapface') {
+      state.tonemapB = 'none';
+      changed = true;
+    }
+    if (!flimLutOk && state.tonemapA === 'flim') {
+      state.tonemapA = 'none';
+      changed = true;
+    }
+    if (!flimLutOk && state.tonemapB === 'flim') {
+      state.tonemapB = 'none';
+      changed = true;
+    }
+    if (changed) {
+      controls?.setState(state);
+      persistCurrentState();
+    }
+  };
+
   let rafId = 0;
   const frame = (): void => {
+    validateLutOperators();
+
+    packedA.set(packOperatorParams(state.tonemapA, state.paramsA[state.tonemapA]));
+    packedB.set(packOperatorParams(state.tonemapB, state.paramsB[state.tonemapB]));
+
     renderer.render(
       viewToIndex[state.view],
       state.exposure,
@@ -264,7 +486,9 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       tonemapToIndex[state.tonemapB],
       compareToIndex[state.compareMode],
       state.split,
-      inputColorSpaceToIndex[state.inputColorSpace]
+      inputColorSpaceToIndex[state.inputColorSpace],
+      packedA,
+      packedB
     );
     rafId = window.requestAnimationFrame(frame);
   };
@@ -277,6 +501,23 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
     }
   };
   window.addEventListener('resize', onResize);
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key.toLowerCase() !== 'h') {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
+      return;
+    }
+    if (!(options.showControls ?? DEFAULTS.showControls)) {
+      return;
+    }
+    state.panelVisible = !state.panelVisible;
+    controls?.setVisible(state.panelVisible);
+    persistCurrentState();
+  };
+  window.addEventListener('keydown', onKeyDown);
 
   let destroyed = false;
 
@@ -293,6 +534,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.view = view;
       controls?.setState(state);
+      persistCurrentState();
     },
     setExposure(exposureEv: number): void {
       if (destroyed) {
@@ -300,6 +542,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.exposure = exposureEv;
       controls?.setState(state);
+      persistCurrentState();
     },
     setTonemapA(op: TonemapOperator): void {
       if (destroyed) {
@@ -307,6 +550,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.tonemapA = op;
       controls?.setState(state);
+      persistCurrentState();
     },
     setTonemapB(op: TonemapOperator): void {
       if (destroyed) {
@@ -314,6 +558,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.tonemapB = op;
       controls?.setState(state);
+      persistCurrentState();
     },
     setCompareMode(mode: CompareMode): void {
       if (destroyed) {
@@ -321,6 +566,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.compareMode = mode;
       controls?.setState(state);
+      persistCurrentState();
     },
     setSplit(split: number): void {
       if (destroyed) {
@@ -328,6 +574,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.split = Math.min(0.95, Math.max(0.05, split));
       controls?.setState(state);
+      persistCurrentState();
     },
     setInputColorSpace(space: InputColorSpace): void {
       if (destroyed) {
@@ -335,6 +582,56 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       state.inputColorSpace = space;
       controls?.setState(state);
+      persistCurrentState();
+    },
+    setTonemapParams(side: OperatorSide, partial: Partial<TonemapParams>): void {
+      if (destroyed) {
+        return;
+      }
+      if (side === 'A') {
+        state.paramsA = mergeSideParams(state.paramsA, state.tonemapA, partial);
+      } else {
+        state.paramsB = mergeSideParams(state.paramsB, state.tonemapB, partial);
+      }
+      controls?.setState(state);
+      persistCurrentState();
+    },
+    resetTonemapParams(side: OperatorSide, op?: TonemapOperator): void {
+      if (destroyed) {
+        return;
+      }
+      const defaults = createDefaultOperatorParamState();
+      if (side === 'A') {
+        const target = op ?? state.tonemapA;
+        state.paramsA = {
+          ...state.paramsA,
+          [target]: { ...defaults[target] }
+        };
+      } else {
+        const target = op ?? state.tonemapB;
+        state.paramsB = {
+          ...state.paramsB,
+          [target]: { ...defaults[target] }
+        };
+      }
+      controls?.setState(state);
+      persistCurrentState();
+    },
+    setControlsVisible(visible: boolean): void {
+      if (destroyed) {
+        return;
+      }
+      state.panelVisible = visible;
+      controls?.setVisible(visible);
+      persistCurrentState();
+    },
+    toggleControls(): void {
+      if (destroyed) {
+        return;
+      }
+      state.panelVisible = !state.panelVisible;
+      controls?.setVisible(state.panelVisible);
+      persistCurrentState();
     },
     resize(width?: number, height?: number, dpr?: number): void {
       if (destroyed) {
@@ -357,6 +654,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
       }
       destroyed = true;
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('keydown', onKeyDown);
       window.cancelAnimationFrame(rafId);
       controls?.destroy();
       controls = null;
