@@ -15,9 +15,25 @@ export type ViewMode =
   | 'luminanceHeatmap'
   | 'channelInspect';
 
-export type TonemapOperator = 'none' | 'acesFitted' | 'reinhard' | 'agx' | 'agxPunchy';
+export type TonemapOperator =
+  | 'none'
+  | 'acesFitted'
+  | 'reinhard'
+  | 'agx'
+  | 'agxGolden'
+  | 'agxPunchy'
+  | 'uchimura'
+  | 'hejl'
+  | 'gt7'
+  | 'tonyMcMapface'
+  | 'flim'
+  | 'amdLpm';
 export type CompareMode = 'single' | 'splitAB';
 export type InputColorSpace = 'linearSrgb' | 'acesCg';
+export type OperatorSide = 'A' | 'B';
+export type TonemapParamValue = number | boolean | string;
+export type TonemapParams = Record<string, TonemapParamValue>;
+export type OperatorParamState = Record<TonemapOperator, TonemapParams>;
 
 export interface DemoOptions {
   width?: number;
@@ -31,6 +47,10 @@ export interface DemoOptions {
   initialCompareMode?: CompareMode;
   initialSplit?: number;
   initialInputColorSpace?: InputColorSpace;
+  initialParamsA?: Partial<OperatorParamState>;
+  initialParamsB?: Partial<OperatorParamState>;
+  initialPanelVisible?: boolean;
+  persistState?: boolean;
   showControls?: boolean;
 }
 
@@ -43,6 +63,10 @@ export interface DemoInstance {
   setCompareMode(mode: CompareMode): void;
   setSplit(split: number): void;
   setInputColorSpace(space: InputColorSpace): void;
+  setTonemapParams(side: OperatorSide, partial: Partial<TonemapParams>): void;
+  resetTonemapParams(side: OperatorSide, op?: TonemapOperator): void;
+  setControlsVisible(visible: boolean): void;
+  toggleControls(): void;
   resize(width?: number, height?: number, dpr?: number): void;
   destroy(): void;
 }
@@ -62,5 +86,8 @@ export interface RenderState {
   compareMode: CompareMode;
   split: number;
   inputColorSpace: InputColorSpace;
+  paramsA: OperatorParamState;
+  paramsB: OperatorParamState;
+  panelVisible: boolean;
   channel: 0 | 1 | 2;
 }
