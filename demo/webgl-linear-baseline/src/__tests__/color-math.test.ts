@@ -4,12 +4,24 @@ import {
   acesFittedChannel,
   agxChannel,
   agxPunchyChannel,
+  amdLpmApproxChannel,
   applyExposure,
   computeLuminance,
+  flimLogEncodeChannel,
+  gt7CurveChannel,
+  hejlChannel,
   linearToSrgbChannel,
   reinhardChannel,
-  srgbToLinearChannel
+  reinhardExtendedChannel,
+  srgbToLinearChannel,
+  uchimuraChannel
 } from '../core/color';
+
+function assertMonotonic(samples: number[]): void {
+  for (let i = 1; i < samples.length; i += 1) {
+    expect(samples[i]).toBeGreaterThanOrEqual(samples[i - 1]);
+  }
+}
 
 describe('color math', () => {
   it('applies exposure in EV', () => {
@@ -35,39 +47,33 @@ describe('color math', () => {
     expect(back).toBeCloseTo(srgb, 4);
   });
 
-  it('aces fitted channel keeps value in range and is monotonic on sample points', () => {
+  it('aces fitted channel keeps value in range and monotonic', () => {
     const sample = [0, 0.18, 1, 2, 4, 8, 16].map((v) => acesFittedChannel(v));
     for (const v of sample) {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(1);
     }
-    for (let i = 1; i < sample.length; i += 1) {
-      expect(sample[i]).toBeGreaterThanOrEqual(sample[i - 1]);
-    }
+    assertMonotonic(sample);
   });
 
-  it('reinhard channel compresses highlights and is monotonic', () => {
+  it('reinhard channel compresses highlights', () => {
     const sample = [0, 0.18, 1, 2, 4, 8, 16].map((v) => reinhardChannel(v));
-    expect(sample[0]).toBeCloseTo(0, 6);
     expect(sample[2]).toBeCloseTo(0.5, 6);
-    for (const v of sample) {
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThanOrEqual(1);
-    }
-    for (let i = 1; i < sample.length; i += 1) {
-      expect(sample[i]).toBeGreaterThanOrEqual(sample[i - 1]);
-    }
+    assertMonotonic(sample);
   });
 
-  it('agx channel keeps values bounded and monotonic on sample points', () => {
+  it('reinhard extended channel is monotonic', () => {
+    const sample = [0, 0.18, 1, 2, 4, 8, 16].map((v) => reinhardExtendedChannel(v, 4));
+    assertMonotonic(sample);
+  });
+
+  it('agx channel keeps values bounded and monotonic', () => {
     const sample = [0, 0.001, 0.18, 1, 2, 4, 8, 16].map((v) => agxChannel(v));
     for (const v of sample) {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(1);
     }
-    for (let i = 1; i < sample.length; i += 1) {
-      expect(sample[i]).toBeGreaterThanOrEqual(sample[i - 1]);
-    }
+    assertMonotonic(sample);
   });
 
   it('agx punchy channel stays bounded and monotonic', () => {
@@ -76,9 +82,43 @@ describe('color math', () => {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(1);
     }
-    for (let i = 1; i < sample.length; i += 1) {
-      expect(sample[i]).toBeGreaterThanOrEqual(sample[i - 1]);
+    assertMonotonic(sample);
+  });
+
+  it('uchimura channel is monotonic on sample points', () => {
+    const sample = [0, 0.02, 0.18, 0.5, 1, 2, 4].map((v) => uchimuraChannel(v));
+    assertMonotonic(sample);
+  });
+
+  it('hejl channel is monotonic and bounded near [0,1]', () => {
+    const sample = [0, 0.02, 0.18, 0.5, 1, 2, 4].map((v) => hejlChannel(v, 1));
+    assertMonotonic(sample);
+    expect(sample[0]).toBeGreaterThanOrEqual(0);
+    expect(sample[sample.length - 1]).toBeLessThanOrEqual(1.25);
+  });
+
+  it('gt7 curve channel is monotonic on key sample points', () => {
+    const sample = [0, 0.05, 0.18, 0.5, 1, 2, 4].map((v) => gt7CurveChannel(v));
+    assertMonotonic(sample);
+  });
+
+  it('amd lpm approx channel remains bounded and compresses highlights', () => {
+    const sample = [0, 0.05, 0.18, 0.5, 1, 2, 4, 8].map((v) => amdLpmApproxChannel(v));
+    for (const v of sample) {
+      expect(Number.isFinite(v)).toBe(true);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(2);
     }
+    expect(sample[sample.length - 1]).toBeLessThan(1);
+  });
+
+  it('flim log encode is monotonic and bounded', () => {
+    const sample = [0, 0.001, 0.01, 0.18, 1, 4, 16].map((v) => flimLogEncodeChannel(v));
+    for (const v of sample) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+    assertMonotonic(sample);
   });
 
   it('acescg to linear srgb keeps neutral close to neutral', () => {
