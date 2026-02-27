@@ -53,8 +53,8 @@ function create3DTexture(gl: WebGL2RenderingContext): WebGLTexture {
     throw new Error('Failed to allocate 3D texture.');
   }
   gl.bindTexture(gl.TEXTURE_3D, tex);
-  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
@@ -93,6 +93,9 @@ function uploadLut3D(gl: WebGL2RenderingContext, tex: WebGLTexture, lut: Lut3DDa
       lut.data as Float32Array
     );
   }
+  const canLinearFilterFloat = lut.format === 'rgb9e5' || !!gl.getExtension('OES_texture_float_linear');
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, canLinearFilterFloat ? gl.LINEAR : gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, canLinearFilterFloat ? gl.LINEAR : gl.NEAREST);
   gl.bindTexture(gl.TEXTURE_3D, null);
 }
 

@@ -75,23 +75,27 @@ function parseSpi3d(text: string): Lut3DData {
   const voxelCount = width * height * depth;
   const out = new Float32Array(voxelCount * 3);
 
-  let cursor = 0;
+  let written = 0;
   for (let i = 3; i < lines.length; i += 1) {
     const tokens = lines[i].split(/\s+/).map((x) => Number(x));
     if (tokens.length < 6 || tokens.some((x) => Number.isNaN(x))) {
       continue;
     }
-    if (cursor + 2 >= out.length) {
-      break;
+    const x = Math.floor(tokens[0]);
+    const y = Math.floor(tokens[1]);
+    const z = Math.floor(tokens[2]);
+    if (x < 0 || y < 0 || z < 0 || x >= width || y >= height || z >= depth) {
+      continue;
     }
-    out[cursor] = tokens[3];
-    out[cursor + 1] = tokens[4];
-    out[cursor + 2] = tokens[5];
-    cursor += 3;
+    const base = ((z * height + y) * width + x) * 3;
+    out[base] = tokens[3];
+    out[base + 1] = tokens[4];
+    out[base + 2] = tokens[5];
+    written += 1;
   }
 
-  if (cursor !== out.length) {
-    throw new Error(`Incomplete SPI3D payload: expected ${out.length / 3}, got ${cursor / 3}`);
+  if (written !== voxelCount) {
+    throw new Error(`Incomplete SPI3D payload: expected ${voxelCount}, got ${written}`);
   }
 
   return {
