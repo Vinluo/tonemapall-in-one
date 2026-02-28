@@ -66,16 +66,6 @@ npm run build
 npm run build:pages
 ```
 
-### GitHub Pages Deployment Example
-
-- Workflow: `.github/workflows/deploy-demo.yml`
-- Trigger: push to `master` or manual dispatch
-- Output: `demo/webgl-linear-baseline/dist-pages`
-
-Notes:
-
-1. `npm run build` keeps producing the embeddable library bundle.
-2. `npm run build:pages` produces the deployable GitHub Pages demo site.
 
 ## References
 
