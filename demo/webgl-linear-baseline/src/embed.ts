@@ -99,22 +99,24 @@ const inputColorSpaceToIndex: Record<InputColorSpace, number> = {
   acesCg: 1
 };
 
+const BASE = import.meta.env.BASE_URL;
+
 const hdrPath: Record<'hdr01' | 'hdr02', string> = {
-  hdr01: '/assets/hdr/test_scene_01.hdr',
-  hdr02: '/assets/hdr/test_scene_02.hdr'
+  hdr01: `${BASE}assets/hdr/test_scene_01.hdr`,
+  hdr02: `${BASE}assets/hdr/test_scene_02.hdr`
 };
 
 const exrPath: Record<'exr01' | 'exr02' | 'exr03', string> = {
-  exr01: '/assets/exr/Carrots.exr',
-  exr02: '/assets/exr/StillLife.exr',
-  exr03: '/assets/exr/Kapaa.exr'
+  exr01: `${BASE}assets/exr/Carrots.exr`,
+  exr02: `${BASE}assets/exr/StillLife.exr`,
+  exr03: `${BASE}assets/exr/Kapaa.exr`
 };
 
-const tonyLutPath = '/assets/lut/tony_mc_mapface.dds';
+const tonyLutPath = `${BASE}assets/lut/tony_mc_mapface.dds`;
 const flimLutPath = {
-  default: '/assets/lut/flim_default.spi3d',
-  nostalgia: '/assets/lut/flim_nostalgia.spi3d',
-  silver: '/assets/lut/flim_silver.spi3d'
+  default: `${BASE}assets/lut/flim_default.spi3d`,
+  nostalgia: `${BASE}assets/lut/flim_nostalgia.spi3d`,
+  silver: `${BASE}assets/lut/flim_silver.spi3d`
 } as const;
 
 type FileInputSource = keyof typeof hdrPath | keyof typeof exrPath;
