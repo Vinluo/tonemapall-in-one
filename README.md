@@ -10,7 +10,7 @@
 
 ## Demo（主入口）
 
-- 路径：`/Users/mac46/CodeWorkSpace/CodexProject/demo/webgl-linear-baseline`
+- 路径：`demo/webgl-linear-baseline`
 - 技术栈：Vite + TypeScript + 原生 WebGL2
 - 主要能力：
   - 输入源切换：程序化图案 / HDR / EXR / 本地上传图片
@@ -21,7 +21,7 @@
 ### 本地运行
 
 ```bash
-cd /Users/mac46/CodeWorkSpace/CodexProject/demo/webgl-linear-baseline
+cd demo/webgl-linear-baseline
 npm install
 npm run dev
 ```
@@ -36,9 +36,9 @@ npm run build:pages
 
 ### GitHub Pages 部署示例
 
-- 工作流：`/Users/mac46/CodeWorkSpace/CodexProject/.github/workflows/deploy-demo.yml`
+- 工作流：`.github/workflows/deploy-demo.yml`
 - 触发：推送到 `master` 或手动触发
-- 产物：`/Users/mac46/CodeWorkSpace/CodexProject/demo/webgl-linear-baseline/dist-pages`
+- 产物：`demo/webgl-linear-baseline/dist-pages`
 
 说明：
 
@@ -49,11 +49,11 @@ npm run build:pages
 
 算法来源、论文、快照和索引保留在：
 
-- 索引：`/Users/mac46/CodeWorkSpace/CodexProject/references/tonemap-all-in-one/INDEX.md`
-- 快照目录：`/Users/mac46/CodeWorkSpace/CodexProject/references/tonemap-all-in-one/snapshots`
-- 算法映射：`/Users/mac46/CodeWorkSpace/CodexProject/references/tonemap-all-in-one/algorithms`
+- 索引：`references/tonemap-all-in-one/INDEX.md`
+- 快照目录：`references/tonemap-all-in-one/snapshots`
+- 算法映射：`references/tonemap-all-in-one/algorithms`
 
 ## 项目治理（轻量）
 
-- 愿景：`/Users/mac46/CodeWorkSpace/CodexProject/management/PROJECT_VISION.md`
-- 进度：`/Users/mac46/CodeWorkSpace/CodexProject/management/PROGRESS.md`
+- 愿景：`management/PROJECT_VISION.md`
+- 进度：`management/PROGRESS.md`
