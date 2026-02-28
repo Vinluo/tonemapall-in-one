@@ -8,6 +8,36 @@
 2. 用统一输入链路验证 HDR/EXR/LDR 场景。
 3. 通过最小 WebGL2 实现快速嵌入博客。
 
+## Visual Preview
+
+![Tonemap comparison collage](docs/assets/readme/tonemap-compare-collage.png)
+
+README 头图使用 `EXR StillLife` 的紧凑水平拼图，保留两组场景的高分辨率条带对比图：
+
+1. `EXR StillLife`
+2. `HDR Scene 01`
+
+对比算子固定为：
+
+1. `Linear`
+2. `ACES`
+3. `Reinhard`
+4. `AgX`
+5. `AgX Golden`
+6. `Uchimura`
+7. `GT7`
+8. `Flim`
+
+`EXR StillLife` 的单算法高清素材保留在 `docs/assets/readme/exr-stilllife-*.png`。
+
+### EXR StillLife
+
+![EXR StillLife tonemap comparison](docs/assets/readme/exr-stilllife-compare.png)
+
+### HDR Scene 01
+
+![HDR Scene 01 tonemap comparison](docs/assets/readme/hdr-scene-01-compare.png)
+
 ## Demo（主入口）
 
 - 路径：`demo/webgl-linear-baseline`
