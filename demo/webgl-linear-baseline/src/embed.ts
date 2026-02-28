@@ -368,23 +368,47 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
   let controls: ControlsHandle | null = null;
   let uploadedImage: FloatImage | null = null;
 
+  let inputLoadController: AbortController | null = null;
+  let inputLoadGen = 0;
+
   const applyInput = async (input: InputSource): Promise<void> => {
+    // Cancel any in-flight HDR/EXR load so stale results never overwrite the
+    // current state (fixes the "ghost image applies 30 s later" race condition).
+    inputLoadController?.abort();
+    const gen = ++inputLoadGen;
+
     state.input = input;
 
     if (isHdrInput(input)) {
+      inputLoadController = new AbortController();
+      const { signal } = inputLoadController;
       try {
-        const image = await loadHdrAsFloatImage(hdrPath[input]);
+        const image = await loadHdrAsFloatImage(hdrPath[input], signal);
+        if (gen !== inputLoadGen) {
+          return;
+        }
         renderer.setInput(image);
       } catch (err) {
+        if (gen !== inputLoadGen) {
+          return;
+        }
         console.warn('[linear-demo] failed to load HDR, fallback to ramp', err);
         state.input = 'ramp';
         renderer.setInput(createPattern('ramp'));
       }
     } else if (isExrInput(input)) {
+      inputLoadController = new AbortController();
+      const { signal } = inputLoadController;
       try {
-        const image = await loadExrAsFloatImage(exrPath[input]);
+        const image = await loadExrAsFloatImage(exrPath[input], signal);
+        if (gen !== inputLoadGen) {
+          return;
+        }
         renderer.setInput(image);
       } catch (err) {
+        if (gen !== inputLoadGen) {
+          return;
+        }
         console.warn('[linear-demo] failed to load EXR, fallback to ramp', err);
         state.input = 'ramp';
         renderer.setInput(createPattern('ramp'));
