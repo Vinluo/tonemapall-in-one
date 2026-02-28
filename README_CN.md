@@ -66,16 +66,6 @@ npm run build
 npm run build:pages
 ```
 
-### GitHub Pages 部署示例
-
-- 工作流：`.github/workflows/deploy-demo.yml`
-- 触发：推送到 `master` 或手动触发
-- 产物：`demo/webgl-linear-baseline/dist-pages`
-
-说明：
-
-1. `npm run build` 继续产出可嵌入博客的库包。
-2. `npm run build:pages` 产出可直接部署到 GitHub Pages 的演示站点。
 
 ## References（保留）
 
