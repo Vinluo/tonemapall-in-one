@@ -18,6 +18,7 @@ import {
   createRampPattern,
   createStepWedgePattern
 } from './core/patterns';
+import { srgbToLinearChannel } from './core/color';
 import { loadExrAsFloatImage, loadHdrAsFloatImage } from './core/hdr-loader';
 import { LinearRenderer } from './core/webgl';
 import { loadFlimLut, loadTonyLut } from './core/lut-loader';
@@ -117,7 +118,7 @@ const flimLutPath = {
 } as const;
 
 type FileInputSource = keyof typeof hdrPath | keyof typeof exrPath;
-type PatternInputSource = Exclude<InputSource, FileInputSource>;
+type PatternInputSource = Exclude<InputSource, FileInputSource | 'uploaded'>;
 
 function isHdrInput(input: InputSource): input is keyof typeof hdrPath {
   return input === 'hdr01' || input === 'hdr02';
@@ -125,6 +126,10 @@ function isHdrInput(input: InputSource): input is keyof typeof hdrPath {
 
 function isExrInput(input: InputSource): input is keyof typeof exrPath {
   return input === 'exr01' || input === 'exr02' || input === 'exr03';
+}
+
+function isUploadedInput(input: InputSource): input is 'uploaded' {
+  return input === 'uploaded';
 }
 
 function isTonemapOperator(input: unknown): input is TonemapOperator {
@@ -230,6 +235,62 @@ function mergeSideParams(
   };
 }
 
+async function loadLdrFileAsFloatImage(file: File): Promise<FloatImage> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
+    await image.decode();
+
+    const width = Math.max(1, image.naturalWidth || image.width);
+    const height = Math.max(1, image.naturalHeight || image.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      throw new Error('2D canvas context is unavailable');
+    }
+    ctx.drawImage(image, 0, 0, width, height);
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+
+    const out = new Float32Array(width * height * 4);
+    for (let i = 0; i < width * height; i += 1) {
+      const src = i * 4;
+      const dst = i * 4;
+      out[dst] = srgbToLinearChannel(pixels[src] / 255);
+      out[dst + 1] = srgbToLinearChannel(pixels[src + 1] / 255);
+      out[dst + 2] = srgbToLinearChannel(pixels[src + 2] / 255);
+      out[dst + 3] = pixels[src + 3] / 255;
+    }
+    return { width, height, data: out };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function loadUploadedFileAsFloatImage(file: File): Promise<FloatImage> {
+  const ext = file.name.toLowerCase().split('.').pop() ?? '';
+  if (ext === 'hdr') {
+    const url = URL.createObjectURL(file);
+    try {
+      return await loadHdrAsFloatImage(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  if (ext === 'exr') {
+    const url = URL.createObjectURL(file);
+    try {
+      return await loadExrAsFloatImage(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  return loadLdrFileAsFloatImage(file);
+}
+
 export function createLinearDemo(container: HTMLElement, options: DemoOptions = {}): DemoInstance {
   container.style.position = container.style.position || 'relative';
 
@@ -303,6 +364,7 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
   syncSize();
 
   let controls: ControlsHandle | null = null;
+  let uploadedImage: FloatImage | null = null;
 
   const applyInput = async (input: InputSource): Promise<void> => {
     state.input = input;
@@ -322,6 +384,14 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
         renderer.setInput(image);
       } catch (err) {
         console.warn('[linear-demo] failed to load EXR, fallback to ramp', err);
+        state.input = 'ramp';
+        renderer.setInput(createPattern('ramp'));
+      }
+    } else if (isUploadedInput(input)) {
+      if (uploadedImage) {
+        renderer.setInput(uploadedImage);
+      } else {
+        console.warn('[linear-demo] no uploaded image is available, fallback to ramp');
         state.input = 'ramp';
         renderer.setInput(createPattern('ramp'));
       }
@@ -370,6 +440,20 @@ export function createLinearDemo(container: HTMLElement, options: DemoOptions = 
     controls = createMinimalControls(container, state, {
       onInputChange(input) {
         void applyInput(input);
+      },
+      onUploadImage(file) {
+        void (async () => {
+          try {
+            uploadedImage = await loadUploadedFileAsFloatImage(file);
+            state.inputColorSpace = 'linearSrgb';
+            await applyInput('uploaded');
+          } catch (err) {
+            console.warn('[linear-demo] failed to load uploaded image', err);
+          } finally {
+            controls?.setState(state);
+            persistCurrentState();
+          }
+        })();
       },
       onViewChange(view) {
         state.view = view;

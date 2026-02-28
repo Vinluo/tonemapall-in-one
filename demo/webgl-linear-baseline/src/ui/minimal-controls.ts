@@ -12,6 +12,7 @@ import { getOperatorDescriptor, OPERATOR_DESCRIPTORS, type ParamDescriptor } fro
 
 export interface ControlCallbacks {
   onInputChange(input: InputSource): void;
+  onUploadImage(file: File): void;
   onViewChange(view: ViewMode): void;
   onExposureChange(exposure: number): void;
   onTonemapAChange(op: TonemapOperator): void;
@@ -57,7 +58,8 @@ const inputOptions: Array<{ value: InputSource; label: string }> = [
   { value: 'hdr02', label: 'HDR Scene 02' },
   { value: 'exr01', label: 'EXR Carrots' },
   { value: 'exr02', label: 'EXR StillLife' },
-  { value: 'exr03', label: 'EXR Kapaa' }
+  { value: 'exr03', label: 'EXR Kapaa' },
+  { value: 'uploaded', label: 'Uploaded Image' }
 ];
 
 const viewOptions: Array<{ value: ViewMode; label: string }> = [
@@ -352,6 +354,15 @@ export function createMinimalControls(
   copyButton.textContent = 'Copy Share URL';
   styleButton(copyButton);
 
+  const uploadButton = document.createElement('button');
+  uploadButton.textContent = 'Upload Image';
+  styleButton(uploadButton);
+
+  const uploadInput = document.createElement('input');
+  uploadInput.type = 'file';
+  uploadInput.accept = '.hdr,.exr,image/png,image/jpeg,image/webp,image/avif';
+  uploadInput.style.display = 'none';
+
   const hideUiButton = document.createElement('button');
   hideUiButton.textContent = 'Hide UI';
   styleButton(hideUiButton);
@@ -359,10 +370,11 @@ export function createMinimalControls(
   const actionRow = document.createElement('div');
   actionRow.style.gridColumn = '1 / -1';
   actionRow.style.display = 'grid';
-  actionRow.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+  actionRow.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
   actionRow.style.gap = '8px';
   actionRow.appendChild(resetButton);
   actionRow.appendChild(copyButton);
+  actionRow.appendChild(uploadButton);
   actionRow.appendChild(hideUiButton);
 
   toolsPanel.appendChild(inputLabel);
@@ -471,6 +483,7 @@ export function createMinimalControls(
   container.appendChild(showAButton);
   container.appendChild(showBButton);
   container.appendChild(globalToggleButton);
+  container.appendChild(uploadInput);
 
   const viewState = {
     globalVisible: initial.panelVisible,
@@ -587,6 +600,15 @@ export function createMinimalControls(
 
   resetButton.onclick = () => callbacks.onReset();
   copyButton.onclick = () => callbacks.onCopyShareUrl();
+  uploadButton.onclick = () => uploadInput.click();
+  uploadInput.onchange = () => {
+    const file = uploadInput.files?.[0];
+    if (!file) {
+      return;
+    }
+    callbacks.onUploadImage(file);
+    uploadInput.value = '';
+  };
   hideUiButton.onclick = () => setVisible(false);
   globalToggleButton.onclick = () => setVisible(!viewState.globalVisible);
 
@@ -657,6 +679,8 @@ export function createMinimalControls(
       tonemapBSelect.onchange = null;
       resetButton.onclick = null;
       copyButton.onclick = null;
+      uploadButton.onclick = null;
+      uploadInput.onchange = null;
       hideUiButton.onclick = null;
       globalToggleButton.onclick = null;
       hideAButton.onclick = null;
@@ -670,6 +694,7 @@ export function createMinimalControls(
       showAButton.remove();
       showBButton.remove();
       globalToggleButton.remove();
+      uploadInput.remove();
     }
   };
 }

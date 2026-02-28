@@ -7,7 +7,8 @@ export type InputSource =
   | 'hdr02'
   | 'exr01'
   | 'exr02'
-  | 'exr03';
+  | 'exr03'
+  | 'uploaded';
 
 export type ViewMode =
   | 'srgbPreview'

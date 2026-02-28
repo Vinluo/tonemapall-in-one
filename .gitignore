@@ -23,6 +23,8 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+dist-pages/
+**/dist-pages/
 .vite/
 coverage/
 *.tsbuildinfo

@@ -159,22 +159,26 @@ vec3 agxEotf(vec3 color) {
   return clamp(color, 0.0, 1.0);
 }
 
+vec3 agxCdl(vec3 color, vec3 slope, vec3 offset, vec3 power, float saturation) {
+  vec3 transformed = agxCurve(color);
+  transformed = agxLook(transformed, slope, offset, power, saturation);
+  return agxEotf(transformed);
+}
+
 vec3 agxBase(vec3 color) {
-  return agxEotf(agxCurve(color));
+  return agxCdl(color, vec3(1.0), vec3(0.0), vec3(1.0), 1.0);
 }
 
 vec3 agxGolden(vec3 color, float lookMix) {
-  vec3 baseCurve = agxCurve(color);
-  vec3 looked = agxLook(baseCurve, vec3(1.0, 0.9, 0.5), vec3(0.0), vec3(0.8), 1.3);
-  vec3 lookedLinear = agxEotf(looked);
-  return mix(agxEotf(baseCurve), lookedLinear, clamp(lookMix, 0.0, 1.0));
+  vec3 baseLinear = agxBase(color);
+  vec3 goldenLinear = agxCdl(color, vec3(1.0, 0.9, 0.5), vec3(0.0), vec3(0.8), 1.3);
+  return mix(baseLinear, goldenLinear, clamp(lookMix, 0.0, 1.0));
 }
 
 vec3 agxPunchy(vec3 color, float lookMix) {
-  vec3 baseCurve = agxCurve(color);
-  vec3 looked = agxLook(baseCurve, vec3(1.0), vec3(0.0), vec3(1.35), 1.4);
-  vec3 lookedLinear = agxEotf(looked);
-  return mix(agxEotf(baseCurve), lookedLinear, clamp(lookMix, 0.0, 1.0));
+  vec3 baseLinear = agxBase(color);
+  vec3 punchyLinear = agxCdl(color, vec3(1.0), vec3(0.0), vec3(1.35), 1.4);
+  return mix(baseLinear, punchyLinear, clamp(lookMix, 0.0, 1.0));
 }
 
 const float GT_REFERENCE_LUMINANCE = 100.0;
